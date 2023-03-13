@@ -1,0 +1,83 @@
+--QUESTION 1 Total sales volume and value by month and Product Subscription Type 
+
+-- SYNTAX IS SQL LITE HERE
+-- ASSUMPTION IS THAT DATA IS CLEANED SO WE DO NOT HAVE TO PLACE TOO MANY WHERE CLAUSES 
+-- THE ONLY ASSUMPTION I HAVE MADE IS THAT SUBCRIPTION TYPE TO NOT BE NULL, BUT WE CAN ALWAYS USE INNER JOIN INSTEAD OF A LEFT ONE
+SELECT 
+strftime('%m', q.quote_start_date) as Month  -- DATEPART , OR EXTRACT are valid functions 
+,p.Product_Subscription_Type 
+,SUM(total_price_converted) as total_value -- Aggregate on total converted value 
+,count(P.product_id) as Amount_of_products -- Count product_ids belonging to the product subscription type
+FROM Quotes_full q 
+LEFT JOIN Product_full p on p.product_id = q.product_id -- left join since we know nulls exist, but I do it for the sake making an example of Left join
+INNER JOIN Opportunities_full o -- opportunities are joined here so we can get closed-won 100%
+	on o.quote_id = q.quote_id
+    	and o.Stage = 'Closed Won - 100%' -- filter
+WHERE P.product_subscription_type is not NULL -- subscription types sometimes are null
+group by 1,2
+
+;
+
+---- QUESTION 2
+
+-- SYNTAX IS SQL LITE 
+
+
+-- SET THE STAGE BY JOINING ALL THE REQUIRED TABLES IN ONE PLACE. USING THIS CTE WE THEN TAKE THE MINIMUM DATE OF A PRODUCT AND WE ALSO RANK ACCOUNTS
+with Account_Opp_Quote as (
+select a.Account_Name ,o.Opportunity_id, q.Quote_ID, p.Product_ID, p.Created_Date  from Accounts_MF8OO4GR2C a
+inner join Opportunities_mf8oo4gr2c o on o.account_id = a.account_id 
+	and o.stage = 'Closed Won - 100%'
+INNER JOIN Quotes_mf8oo4gr2c q on q.quote_id = o.quote_id
+LEFT join Product_full p on p.Product_ID = q.product_id
+  order by p.Created_Date asc
+  --	and q.Quote_Start_Date > '01-01-2023' I leave this here in case we want to get this calendar year
+  --	and q.Quote_Start_Date > '01-10-2022' I leave this here in case we want to get this fiscal year
+)
+-- WITH THIS CTE WE MEASURE SALES VOLUME BASED ON HOW MANY CLOSED OPPORTUNITIES THERE ARE TO EACH ACCOUNT 
+, Account_Opps_No as (
+  select a.Account_Name, count(distinct opportunity_id) Number_of_opps 
+  from Account_Opp_Quote a
+  Order by Number_of_opps DESC  
+)
+
+-- WE RANK THE ACCOUNTS BASED ON THE OPPORTUNITIES WITH A WINDOW FUNCTION 
+,  Rankings as (
+SELECT account_name, Number_of_opps
+,DENSE_RANK() over (order by Number_of_opps desc) _Rank -- I GO WITH DENSE RANK , Meaning that we will get  top 5 based on their value. This may mean that we can get more than 5 customers
+-- IF WE USE RANK , IT MAY BE MORE APPROPRIATE IN CERTAIN INSTANCES. 
+-- HOWEVER, NONE OF ROW_NUMBER, RANK, DENSE_RANK, LIMIT , TOP would be correct until we actually run the query and see how many we will get in return.
+FROM Account_Opps_No -- Here it is important how do we define top 5, Rank, Dense_Rank, Row_Number?
+)
+
+-- JOIN MIN DATE OF A PRODUCT THAT BELOGNS TO AN ACCOUNT WITH THE ACCOUNTS AND THEIR RANKING NOT BEING ABOVE 5
+select Account_Name, min(created_date) from Account_Opp_Quote aoq
+INNER JOIN Rankings r using (account_name) 
+where _Rank < 6
+
+;
+-- QUESTION 3 
+
+/* SYNTAX IS SQL SERVER */
+
+with the_diff as (
+select 8 - DATEPART(WEEKDAY,cast(DATEADD(MONTH
+, DATEDIFF(MONTH, 0, GETDATE())-1, 0) as date)) AS difference /* Logic for finding first date of prev. month, 
+then taking the day of the week for that date, eventually get how many days we need to add to reach sunday */
+) 
+, date_reference as (
+select  CAST(DATEADD(DAY,difference,DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE())-1, 0)) as date) as reference_date 
+from the_diff )  /* In this CTE we add the days required to reach the Sunday of the first week of last month */
+
+select distinct a.Account_Name ,o.Opportunity_id, q.Quote_ID
+, cast(q.quote_start_date as date) quote_start_date_casted -- cast as date since it most likely comes as a varchar 
+, cast(q.quote_end_date as date) quote_end_date_casted -- cast as date since it most likely comes as a varchar
+, df.reference_date  -- the reference date which is the date of the last day of the first week of the previous month :D
+from Accounts_MF8OO4GR2C a
+inner join Opportunities_mf8oo4gr2c o on o.account_id = a.account_id 
+	and o.stage = 'Closed Won - 100%' -- in order for this one to be active 
+INNER JOIN Quotes_mf8oo4gr2c q on q.quote_id = o.quote_id
+cross join date_reference df 
+where 1=1 -- lazy way of commenting out and clauses following a where clause
+and quote_start_date_casted <= df.reference_date
+and quote_end_date_casted >=  df.reference_date 
