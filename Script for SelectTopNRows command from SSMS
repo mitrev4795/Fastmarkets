@@ -1,0 +1,57 @@
+/****** Script for SelectTopNRows command from SSMS  ******/
+   with user_logons as (
+  select d_user_id user_id, d_client_id client_id
+  , auth_action_type,
+  u.api_username_current, 
+  u.d_company_id, 
+  u.sf_contact_id, 
+  l.event_date
+  --, sum(count(auth_action_type)) OVER(partition by event_date) as total_count
+  from mrt.f_logons l
+  right join mrt.d_users u on u.id = l.d_user_id 
+  where 1=1
+  --d_user_id = 5511 and 
+  and event_date > '2023-02-01'
+  and u.is_internal = 'No'
+  and l.auth_action_type = 'Logon'
+  --group by d_user_id,d_client_id,d_session_id,auth_action_type,event_date
+-- order by event_date desc 
+ )
+
+ ,aggregated_table as (
+ SELECT s.*, p.*
+ , ul.api_username_current, ul.auth_action_type, ul.client_id, ul.d_company_id comp_id, ul.event_date, ul.sf_contact_id, ul.user_id
+ , c.customer_success_manager, c.d_country_id, c.duns_number, c.global_ultimate_duns_number, c.id id_company, c.key_account_manager
+ , c.location, c.name name_company, c.name_unique, c.parent_id, 
+ c.sf_account_id, c.sf_account_url, c.sf_city, c.sf_country, c.type type_name
+  FROM [mrt].f_subscriptions s 
+  JOIN [mrt].d_products p on p.id = s.d_product_id and p.code  like 'MFT%'
+  left join user_logons ul on ul.user_id = s.d_user_id
+  join mrt.d_companies c on c.id = s.d_company_id
+  --where sf_order_number = 00503844
+  where s.start_date > '2023-02-01'
+  --and api_username_current = 'mnogueira@alumisel.com'
+  --and sf_order_number = 00521151
+)
+, min_max as (
+select  sf_order_number, sf_account_id, user_id, api_username_current
+,min(start_date) min_date
+, cast(max(GETDATE()) as date) max_date 
+from aggregated_table
+group by sf_order_number, sf_account_id, user_id, api_username_current
+)
+, the_date as (
+select * from min_max
+cross join (
+SELECT CHOOSE(DATEPART(dw, date), 'WEEKEND','Weekday',
+'Weekday','Weekday','Weekday','Weekday','WEEKEND') WorkDay ,* 
+FROM mrt.d_dates
+) d
+WHERE d.date between min_date and  max_date
+)
+
+select * from the_date mx
+left join aggregated_table at on at.sf_order_number = mx.sf_order_number and at.event_date = mx.date
+--where api_username_current = 'mircea.rasovan@artrom.com'
+order by mx.date
+;
