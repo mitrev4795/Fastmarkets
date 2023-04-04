@@ -1,0 +1,50 @@
+ with user_logons as (
+  select l.d_user_id user_id,
+  u.api_username_current, 
+  u.d_company_id, 
+  u.sf_contact_id,
+  l.event_date
+  from x l   -- mrt.f_logons l
+  left join (select DISTINCT * from z where  d_product_id in (56,23)) s 
+	on s.d_user_id = l.d_user_id and 
+  RIGHT join y u on u.id = l.d_user_id  -- why not left?
+  where 1=1
+  --d_user_id = 5511 and 
+  and l.event_date > '2023-02-01'
+  and u.is_internal = 'No'
+  --and l.auth_action_type = 'Logon'
+  --group by d_user_id,d_client_id,d_session_id,auth_action_type,event_date
+-- order by event_date desc 
+ )
+
+
+ SELECT distinct
+ s.d_user_id, s.d_company_id
+ --, s.d_product_id
+ --, s.d_ncu_publication_id
+ , s.start_date, s.expire_date, s.end_date, s.trial_end_date, s.sf_order_number,
+ s.sf_opportunity_name
+ , s.d_product_id, s.d_ncu_publication_id
+ , p.id, p.name, p.code, p.currency, p.type, ul.user_id
+ , ul.api_username_current, ul.d_company_id, ul.sf_contact_id,
+ ul.event_date
+ --, ul.event_timestamp
+ , c.* ,
+ us.api_username_current as user_email
+  FROM ( select DISTINCT * from z where  d_product_id in (56,23)) s   -- Because only FM PLatform access    -- [mrt].f_subscriptions s 
+  -- the issue in the from clause is that it joins on user_id all the tables that follow. If there is another order attached to these clients it will mix it up
+  -- Final number of rows should match what we have in the logons table 
+  LEFT JOIN q p on p.id = s.d_product_id --and p.code  like 'MFT%'
+  left join c ul on ul.user_id = s.d_user_id
+  join r c on c.id = s.d_company_id
+  left join t us on us.id = s.d_user_id 
+  --where sf_order_number = 00503844
+  where s.start_date > '2023-02-01'
+  and sf_order_number = 00522851 -- 00522323
+  and s.end_date > cast(GETDATE() as date)
+  --and s.d_user_id = 1148530
+  --and s.d_company_id = 188610
+  --and sf_account_id = '0016Q00001ZlqTtQAJ'
+  --and ul.api_username_current = 'dan.popa@artrom.com'
+  order by sf_order_number, d_user_id
+  ;
