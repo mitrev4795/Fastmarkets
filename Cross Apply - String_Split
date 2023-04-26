@@ -1,0 +1,7 @@
+select distinct id,x.value,y.value
+-- ,x.value, y.value 
+--from mrt.m_news_requests_aggregated n
+from mrt.d_articles a --on a.id = n.d_article_id
+cross apply string_split(a.commodities,',') x 
+cross apply string_split(a.locations,',') y 
+where exists (select 1 from mrt.m_news_requests_aggregated nra where nra.d_article_id = a.id and nra.event_date > '2022-04-01')
