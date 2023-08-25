@@ -1,0 +1,84 @@
+FUZZY MATCHING VBA SCRIPT 
+
+Option Base 1
+Function CompanyStan(inp As String)
+'Sub CompanyStan()
+'For Each c In Selection
+Dim hold, orig, replacement, one, two, three, four, pat, regexstring_nfmt, regexstring_ltr, padltr, ltrliststr As String
+replacement = ""
+orig = CStr(inp)
+'orig = c.Value
+one = Replace(LCase(orig), " and ", " & ")
+Dim x As Variant
+Dim xpad(), ltrlist(), regexstring_nfmt_list() As String
+Dim xpadct, ltrlistct, lastltr, regexstring_nfmt_iter As Integer
+xpadct = 1
+x = Array("co ltd", "pte ltd", "co inc", _
+"co limited", "co kg", "pty ltd", "ltd co", _
+"sam", "sarl", "bv", "sac", "ltd", "limited", "llc", "ooo", "sa", _
+"corporation", "sl", "ag", "co", "gmbh", "inc", "doo", "sae", "corp", "nv", "lte les", "plc", "llp", "sa de cv", "spa")
+Dim regexObject As RegExp
+Set regexObject = New RegExp
+For i = LBound(x) To UBound(x)
+    ltrlistct = 1
+    ReDim ltrlist(ltrlistct)
+    ltrlist(ltrlistct) = "[&\.\(\), ]"
+    regexstring_nfmt = CStr(x(i))
+    ReDim regexstring_nfmt_list(1)
+    For mm = 1 To Len(regexstring_nfmt)
+    ReDim Preserve regexstring_nfmt_list(mm)
+    regexstring_nfmt_list(mm) = Mid(regexstring_nfmt, mm, 1)
+    Next mm
+    'regexstring_nfmt_list = Split(regexstring_nfmt, vbNullChar)
+    For j = LBound(regexstring_nfmt_list) To UBound(regexstring_nfmt_list) - 1
+        regexstring_ltr = CStr(regexstring_nfmt_list(j))
+        If regexstring_ltr = " " Then
+            padltr = "[&\.\(\), ]+"
+        Else
+            padltr = regexstring_ltr & "[&\.\(\), ]*"
+        End If
+        ltrlistct = ltrlistct + 1
+        ReDim Preserve ltrlist(ltrlistct)
+        ltrlist(ltrlistct) = padltr
+    Next j
+    lastltr = UBound(regexstring_nfmt_list)
+    padltr = CStr(regexstring_nfmt_list(lastltr)) & "[&\.\(\), ]*$"
+    ltrlistct = ltrlistct + 1
+    ReDim Preserve ltrlist(ltrlistct)
+    ltrlist(ltrlistct) = padltr
+    ltrliststr = Join(ltrlist, "")
+    'MsgBox ltrliststr
+    ReDim Preserve xpad(xpadct)
+    xpad(xpadct) = ltrliststr
+    xpadct = xpadct + 1
+    'ReDim ltrlist(0)
+    Erase ltrlist
+    'pat = CStr(x(i))
+    'With regexObject
+    '    .Pattern = pat
+    'End With
+    'one = regexObject.Replace(one, replacement)
+    'one = Replace(one, pat, "")
+    'one = pat
+Next i
+ReDim Preserve xpad(xpadct)
+xpad(xpadct) = " \(group\) "
+For k = LBound(xpad) To UBound(xpad)
+    pat = CStr(xpad(k))
+    With regexObject
+        .Pattern = pat
+    End With
+    one = regexObject.Replace(one, " ")
+Next k
+regexObject.Pattern = " +"
+two = regexObject.Replace(one, " ")
+regexObject.Pattern = "^ "
+three = regexObject.Replace(two, "")
+regexObject.Pattern = "[\., ]+$"
+four = regexObject.Replace(three, "")
+regexObject.Pattern = "&$| &$"
+four = regexObject.Replace(four, "")
+CompanyStan = four
+'c.Offset(, 1).Value = four
+'Next c
+End Function
