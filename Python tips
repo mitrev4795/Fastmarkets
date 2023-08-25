@@ -1,0 +1,20 @@
+# Extract Email
+if fields.Email != Null and "@" in fields.Email:
+    out1.domain = fields.Email[fields.Email.index("@")+1 : ].lower()
+
+# COMPARE TO DATE 
+from datetime import datetime
+fields.OrderExpiryDate_custom_Max > datetime.strptime('2022-07-05' , '%Y-%m-%d'):
+#EXTRACT MONTH
+fields['Created Date'].month , .year 
+
+# FIND WEEK NUMBER 
+fields['Start Date'].isocalendar()[1]
+#IMPORT DATE 
+from datetime import date
+date.today()
+
+# FINDING BASED ON SEVERAL SYMBOLS REPEATING  - THIS IS EXCEL
+=TRIM(MID(D2,A2+1,B2-A2-1))
+=FIND("/",D2,FIND("/",D2)+28)
+=FIND("/",D2,FIND("/",D2)+20)
