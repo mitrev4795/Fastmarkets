@@ -1,0 +1,126 @@
+import pandas as pd
+
+#df = pd.read_csv(r'C:\Users\teodor.mitrev\Downloads\Company_clean.xlsx.csv')
+#df_account = pd.read_csv(r'C:\Users\teodor.mitrev\Downloads\account_companies.csv')
+
+df = pd.read_csv(r'C:\Users\teodor.mitrev\Downloads\20230125_Event_SSNA_attendees.csv')
+df_account = pd.read_csv(r'C:\Users\teodor.mitrev\Downloads\ActiveCompanies_based_on_OPU.csv')
+
+accounts = pd.read_csv(r'C:\Users\teodor.mitrev\Downloads\Account Names.csv')
+accounts_fuzzy = pd.read_csv(r'C:\Users\teodor.mitrev\accounts_fuzzy_cleaned.csv')
+
+df['Company Name'].loc[30]
+accounts.info
+
+# LOWER 
+for i in range (len(df)):
+    df['Company Name'].values[i] = df['Company Name'].values[i].lower()
+    
+for i in range (len(df_account)):
+    df_account['Name'].values[i] = str(df_account['Name'].values[i]).lower()
+
+for i in range (len(accounts)):
+    accounts['ChangeFrom'].values[i] = str(accounts['ChangeFrom'].values[i]).lower()
+
+# REMOVE LETTERS NOT PART OF ASCI ALPHABET (turkish S e.g)
+import unicodedata
+
+for i in range (len(df)):
+    df['Company Name'].values[i] = unicodedata.normalize('NFKD', df['Company Name'].values[i]).encode('ASCII', 'ignore').decode()
+
+for i in range (len(df_account)):
+    df_account['Name'].values[i] = unicodedata.normalize('NFKD', str(df_account['Name'].values[i])).encode('ASCII', 'ignore').decode()
+
+for i in range (len(accounts)):
+    accounts['ChangeFrom'].values[i] = unicodedata.normalize('NFKD', str(accounts['ChangeFrom'].values[i])).encode('ASCII', 'ignore').decode()
+
+
+# REMOVE characters
+import re
+for i in range (len(df)):
+    df['Company Name'].values[i] = re.sub(r'[^\w\s]','',df['Company Name'].values[i])
+    
+for i in range (len(accounts)):   # does not work
+    accounts['ChangeFrom'].values[i] = re.sub(r'[^\w\s]','',accounts['ChangeFrom'].values[i])
+
+# REMOVE STANDARD NAMINGS OF COMPANIES - LTD, B.V etc
+from cleanco import basename
+
+for i in range (len(df)):
+     df['Company Name'].values[i] =  basename(df['Company Name'].values[i])
+
+for i in range (len(accounts)):
+    accounts['ChangeFrom'].values[i] = basename(str(accounts['ChangeFrom'].values[i]))
+
+# remove most common used words - will throw an error if we do not remove suffix
+for i in range (len(accounts)):
+    ' '.join(re.sub(r'\b{}\b'.format(re.escape("N.V.")), '', accounts['ChangeFrom'].values[i]).split())
+
+!pip install name_matching
+
+from name_matching.name_matcher import NameMatcher
+
+matcher = NameMatcher(top_n=10,
+    lowercase=True,
+    punctuations=False,
+    remove_ascii=True,
+    legal_suffixes=True,
+    common_words=False,
+    verbose=True)
+
+matcher.set_distance_metrics(['discounted_levenshtein',
+                              'SSK', 
+                              'fuzzy_wuzzy_token_sort'])
+
+#matcher.load_and_process_master_data('Name', df_account)
+#df_final = matcher.match_names(to_be_matched=df, column_matching='Company Name')
+
+matcher.load_and_process_master_data('ChangeFrom', accounts_fuzzy)
+df_final = matcher.match_names(to_be_matched=accounts, column_matching='ChangeFrom')
+
+# accounts.to_csv("accounts_fuzzy_cleaned.csv",encoding='utf-8')
+df_final.to_csv("accounts_fuzzy_cleaned and matched.csv",encoding='utf-8')
+
+# REMOVE CHARACTERS NED CODE
+import re
+def standardize(y): 
+    one = y.lower().replace(' and ', ' & ')
+
+    stems = ['co ltd', 'pte ltd', 
+             'co inc', 'co limited', 'co kg',
+             'pty ltd', 'ltd co', 'sam', 'sarl', 'bv', 'sac','ltd','limited',
+             'llc','ooo','sa','corporation', 
+             'sl', 'ag', 'co', 'gmbh', 'inc', 'doo', 'sae', 'corp', 'nv','lte les', 'plc', 'llp',
+            'sa de cv']
+    pad_stems = []
+
+    for stem in stems:
+        ltr_list = ['[&\.\(\), ]']
+        for ltr in stem[:-1]:
+            if ltr == ' ':
+                padltr = '[&\.\(\), ]+'
+            else:
+                padltr = ltr + '[&\.\(\), ]*'
+            ltr_list.append(padltr)
+        ltr_list.append(stem[-1]+'[&\.\(\), ]*$' )
+        
+        pad_stems.append(''.join(ltr_list))
+
+    #internals
+    pad_stems.append(' \(group\) ')
+        
+    for ps in pad_stems:
+        #print(ps)
+        one = re.sub(ps,' ',one)
+        #print(one)
+    two = re.sub(' +',' ',one)
+    three = re.sub('^ ', '', two)
+    four = re.sub('[\., ]+$', '', three)
+        
+    return four
+
+for i in range (len(accounts)):
+    accounts['ChangeFrom'].values[i] = standardize(accounts['ChangeFrom'].values[i])
+
+for i in range (len(df_account)):
+    df_account['Name'].values[i] = standardize(str(df_account['Name'].values[i]))
