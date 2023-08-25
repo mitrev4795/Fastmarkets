@@ -1,0 +1,39 @@
+  WITH prx AS (
+  SELECT SUM(pr.[requests_count]) as RequestCount,
+  --pr.d_action_id,
+  pr.d_user_id,
+  pr.d_instrument_id,
+  --pr.d_price_type_id,
+  pr.event_date [date]
+  FROM [mrt].[m_price_requests_aggregated] pr
+  JOIN mrt.d_actions a
+  ON pr.d_action_id=a.Id
+  JOIN mrt.d_price_types pt
+  ON pr.d_price_type_id=pt.Id
+  WHERE pr.event_date >  '2020-05-20'
+  AND a.Name  IN ('GetPrices','GetPricesHistory','GetLatestPriceData','GetInstruments')
+  AND pt.Name = 'Physical Price'
+  GROUP BY /*pr.d_action_id,*/ pr.d_user_id,pr.d_instrument_id,/*pr.d_price_type_id,*/pr.event_date
+  )
+
+  select --top 100
+      pra.RequestCount, 
+  	  LOWER(u.api_username_current) AS [User],
+	  CAST(pra.date AS DATE) AS [ActionDate],
+	  CAST(DATEADD(mm,DATEDIFF(mm,0,pra.date),0) AS DATE) as ActionMonth,
+	  --a.Name AS [Action],
+	  --i.commodity As Commodity,
+	  i.symbol As Symbol
+	  
+  FROM prx  AS pra
+  JOIN mrt.d_users u
+  on pra.d_user_id=u.id
+  JOIN mrt.d_instruments i
+  on pra.d_instrument_id=i.d_instrument_id
+  --JOIN mrt.d_actions a
+  --ON pra.d_action_id=a.Id
+  --JOIN mrt.d_price_types pt 
+  --ON pra.d_price_type_id=pt.Id
+  WHERE u.is_internal = 'No' 
+  --AND a.Name  IN ('GetPrices','GetPricesHistory','GetLatestPriceData','GetInstruments')
+  --AND pt.Name = 'Physical Price'
