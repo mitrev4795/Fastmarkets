@@ -1,0 +1,240 @@
+--QUERY FOR GLOBAL 
+
+SELECT DISTINCT *
+INTO #subscription_temp_table
+FROM mrt.f_subscriptions
+where d_product_id in (56,23)
+;
+select distinct pra.event_date, pra.d_user_id
+--INTO #price_requests_temp_table
+from [mrt].[m_price_requests_aggregated] pra
+  WHERE 1=1
+  AND pra.event_date > '2022-03-01'
+  and pra.d_price_type_id = 1
+  and pra.d_action_id in (1,5,8,11)
+;
+select * from #price_requests_temp_table p
+join #subscription_temp_table s on s.d_user_id = p.d_user_id and p.event_date between s.start_date and s.expire_date
+;
+
+with price_usage as (
+select pra.event_date, pra.d_user_id, pra.d_instrument_id, sum(pra.requests_count) RequestCount
+from [mrt].[m_price_requests_aggregated] pra
+  WHERE 1=1
+  AND pra.event_date > '2022-10-01'
+  and pra.d_price_type_id = 1 -- physical price only (alternative is to include market prices, id = 2 - LME etc.)
+  and pra.d_action_id in (1,5,8,11)  -- what those mean you can check in action table
+  --and pra.d_user_id = 1069347
+group by pra.event_date, pra.d_user_id, pra.d_instrument_id)
+
+select pra.*
+, cast(pra.d_user_id as varchar) + cast(pra.event_date as varchar)
+,u.api_username_current, u.d_company_id, u.type user_type
+,i.symbol, i.packages, i.name instrument_name, i.type, I.commodity
+,c.customer_success_manager, c.name company_name, c.sf_account_id, c.type company_type, c.key_account_manager
+--,the_temp.start_date, the_temp.expire_date, the_temp.sf_order_number, the_temp.sf_opportunity_name
+,s.start_date, s.end_date, s.sf_order_number, s.sf_opportunity_name
+from price_usage pra
+join mrt.d_users u on pra.d_user_id = u.id
+join mrt.d_instruments i on i.d_instrument_id = pra.d_instrument_id
+join mrt.d_companies c on c.id = u.d_company_id 
+
+join (select DISTINCT sub.start_date, sub.end_date, sub.sf_opportunity_name, sub.sf_order_number, sub.d_user_id from  mrt.f_subscriptions sub where d_product_id in (56,23)) s 
+		on s.d_user_id = pra.d_user_id and pra.event_date between s.start_date and s.end_date
+where u.is_internal = 'No'
+--and pra.event_date between s.start_date and s.end_date
+--and pra.d_user_id = 3006
+and EXISTS (SELECT 1 FROM mrt.f_subscriptions s where s.d_user_id = pra.d_user_id and pra.event_date between s.start_date and s.expire_date and s.d_product_id in (56,23))
+-- AGAIN, WE RUN THE ISSUE OF OVERLAPPING TWO ORDERS FOR 1 USER AND DUPLICATING ROWS 
+--and pra.d_user_id = 1
+--and api_username_current = 'nick.dmitruks@gs.com'
+;
+
+select distinct d_user_id, d_company_id,s.start_date, s.end_date, s.sf_order_number, s.sf_opportunity_name from mrt.f_subscriptions s
+left join mrt.d_products p on p.id = s.d_product_id
+where 1=1
+--and s.d_company_id = 3150 
+and d_product_id in (56,23)
+and start_date < '2023-03-01'
+and end_date > '2023-03-01'
+order by start_date;
+;
+
+-- COMBINING PRICE REQUESTS WITH SUBS TO HAVE A LEGEND OF ACTIVITY DATE AND THE ASSOCIATED SUBSCRIPTION THAT DAY
+with requests as (
+select distinct pra.event_date, pra.d_user_id
+--INTO #price_requests_temp_table
+from [mrt].[m_price_requests_aggregated] pra
+  WHERE 1=1
+  AND pra.event_date > '2023-03-01'
+  and pra.d_price_type_id = 1
+  and pra.d_action_id in (1,5,8,11) ) 
+
+,subs as (SELECT DISTINCT *
+--INTO #subscription_temp_table
+FROM mrt.f_subscriptions
+where d_product_id in (56,23)
+and start_date < '2023-03-01'
+and end_date > '2023-03-01')
+
+select cast(r.d_user_id as varchar) + cast(r.event_date as varchar) as user_event,
+s.start_date, s.end_date, s.sf_opportunity_name, s.sf_order_number
+from requests r 
+join subs s on r.d_user_id = s.d_user_id and r.event_date between s.start_date and s.end_date 
+order by user_event asc
+
+
+
+
+select distinct d_user_id, start_date, end_date, sf_opportunity_name from mrt.f_subscriptions s 
+join mrt.d_companies c on c.id = s.d_company_id 
+join mrt.d_users u on u.id = s.d_user_id and u.api_username_current = 'ryohei.sumida@albemarle.com'
+where c.name = 'Albemarle Corporation'
+
+
+select * from mrt.d_instruments
+where type = 'Physical price'
+and symbol like 'MB-LI%'
+;
+
+select * from mrt.f_logons l 
+left join mrt.d_ip_addresses ip_ad on ip_ad.id = l.d_ip_address_id
+;
+select top(100) * from mrt.m_logons_aggregated l
+left join mrt.d_ip_addresses ip_ad on ip_ad.id = l.d_ip_address_id
+
+;
+-- LOGONS
+
+with user_logons as (
+  select l.d_user_id user_id,
+  adr.country as country_ip,
+  adr.city as city_ip,
+  u.api_username_current, 
+  u.d_company_id, 
+  u.sf_contact_id,
+  l.event_date --,
+  --s.sf_order_number,
+  --s.start_date,
+  --s.end_date
+  from mrt.m_logons_aggregated l   -- mrt.f_logons l
+  left join mrt.d_ip_addresses adr on adr.id = l.d_ip_address_id
+  /*left join (select DISTINCT * from mrt.f_subscriptions where  d_product_id in (56,23)) s 
+	on s.d_user_id = l.d_user_id and l.event_date between s.start_date and '2023-03-01' -- s.end_date  */
+	
+  RIGHT join mrt.d_users u on u.id = l.d_user_id  -- why not left?
+  where 1=1 
+  --and d_user_id in (986181,1005588,1020474,1043490,1071644,1060621)  
+  and l.event_date > '2023-02-01'
+  and u.is_internal = 'No'
+ -- and s.sf_order_number = 00521500
+  --and l.auth_action_type = 'Logon'
+  --group by d_user_id,d_client_id,d_session_id,auth_action_type,event_date
+-- order by event_date desc 
+ )
+
+
+ SELECT distinct
+ s.d_user_id, s.d_company_id
+ --, s.d_product_id
+ --, s.d_ncu_publication_id
+ , s.start_date, s.expire_date, s.end_date, s.trial_end_date, s.sf_order_number,
+ s.sf_opportunity_name
+ , s.d_product_id, s.d_ncu_publication_id
+ , p.id, p.name, p.code, p.currency, p.type, ul.user_id
+ , ul.api_username_current, ul.d_company_id, ul.sf_contact_id,
+ ul.event_date
+ ,ul.country_ip
+ ,ul.city_ip
+ --, ul.event_timestamp
+ , c.* ,
+ us.api_username_current as user_email
+  FROM ( 
+  select DISTINCT * from mrt.f_subscriptions where  d_product_id in (56,23) --and start_date < dateadd(day,1,getdate())
+  ) s   -- Because only FM PLatform access    -- [mrt].f_subscriptions s 
+  -- the issue in the from clause is that it joins on user_id all the tables that follow. If there is another order attached to these clients it will mix it up
+  -- Final number of rows should match what we have in the logons table 
+  LEFT JOIN [mrt].d_products p on p.id = s.d_product_id --and p.code  like 'MFT%'
+  left join user_logons ul on ul.user_id = s.d_user_id --and ul.event_date between s.start_date and s.end_date  -- '2023-03-01'
+  join mrt.d_companies c on c.id = s.d_company_id
+  left join [mrt].d_users us on us.id = s.d_user_id 
+  --where sf_order_number = 00503844
+  where s.start_date between '2023-03-01' and cast(getdate() as date)
+  --and sf_order_number = 00522733 -- 00522323
+  and s.end_date > cast(GETDATE() as date)
+  --and (ul.event_date between s.start_date and s.end_date OR ul.event_date is null)
+  --and s.d_user_id in (986181,1005588,1020474,1043490,1071644,1060621)
+  --and s.d_company_id = 188610
+  --and sf_account_id = '0016Q00001ZlqTtQAJ'
+  --and ul.api_username_current = 'dan.popa@artrom.com'
+  order by sf_order_number, d_user_id
+  
+  
+  
+  
+with user_logons as (
+  select l.d_user_id user_id,
+  u.api_username_current, 
+  u.d_company_id, 
+  u.sf_contact_id,
+  l.event_date --,
+  --s.sf_order_number,
+  --s.start_date,
+  --s.end_date
+  from mrt.m_logons_aggregated l   -- mrt.f_logons l
+  /*left join (select DISTINCT * from mrt.f_subscriptions where  d_product_id in (56,23)) s 
+	on s.d_user_id = l.d_user_id and l.event_date between s.start_date and '2022-04-01' -- s.end_date  */
+	
+  RIGHT join mrt.d_users u on u.id = l.d_user_id  -- why not left?
+  where 1=1 
+  --and d_user_id in (986181,1005588,1020474,1043490,1071644,1060621)  
+  and l.event_date > '2022-04-01'
+  and u.is_internal = 'No'
+ -- and s.sf_order_number = 00521500
+  --and l.auth_action_type = 'Logon'
+  --group by d_user_id,d_client_id,d_session_id,auth_action_type,event_date
+-- order by event_date desc 
+ )
+
+
+ SELECT distinct
+ s.d_user_id, s.d_company_id
+ --, s.d_product_id
+ --, s.d_ncu_publication_id
+ , s.start_date, s.expire_date, s.end_date, s.trial_end_date, s.sf_order_number,
+ s.sf_opportunity_name
+ , s.d_product_id, s.d_ncu_publication_id
+ , p.id, p.name, p.code, p.currency, p.type, ul.user_id
+ , ul.api_username_current, ul.d_company_id, ul.sf_contact_id,
+ ul.event_date
+ --, ul.event_timestamp
+ , c.* ,
+ us.api_username_current as user_email
+  FROM ( 
+  select DISTINCT * from mrt.f_subscriptions where  d_product_id in (56,23) --and start_date < dateadd(day,1,getdate())
+  ) s   -- Because only FM PLatform access    -- [mrt].f_subscriptions s 
+  -- the issue in the from clause is that it joins on user_id all the tables that follow. If there is another order attached to these clients it will mix it up
+  -- Final number of rows should match what we have in the logons table 
+  LEFT JOIN [mrt].d_products p on p.id = s.d_product_id --and p.code  like 'MFT%'
+  left join user_logons ul on ul.user_id = s.d_user_id --and ul.event_date between s.start_date and s.end_date  -- '2023-03-01'
+  join mrt.d_companies c on c.id = s.d_company_id
+  left join [mrt].d_users us on us.id = s.d_user_id 
+  --where sf_order_number = 00503844
+  where s.start_date between '2022-04-01' and cast(getdate() as date)
+  --and sf_order_number = 00522733 -- 00522323
+  and s.end_date > cast(GETDATE() as date)
+  --and (ul.event_date between s.start_date and s.end_date OR ul.event_date is null)
+  --and s.d_user_id in (986181,1005588,1020474,1043490,1071644,1060621)
+  --and s.d_company_id = 188610
+  --and sf_account_id = '0016Q00001ZlqTtQAJ'
+  --and ul.api_username_current = 'dan.popa@artrom.com'
+  order by sf_order_number, d_user_id
+  
+  
+  
+  
+  1050687483251
+  ;
+  
+  0875348194 - Веселин Янчев 
+  0875348195 - Христо Иванов 
