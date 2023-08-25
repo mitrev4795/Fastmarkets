@@ -1,0 +1,15 @@
+# Extract Email
+if fields.Email != Null and "@" in fields.Email:
+    out1.domain = fields.Email[fields.Email.index("@")+1 : ].lower()
+
+    # FIND WEEK NUMBER 
+fields['Start Date'].isocalendar()[1]
+#IMPORT DATE 
+from datetime import date
+date.today()
+
+# COMPARE TO DATE 
+from datetime import datetime
+fields.OrderExpiryDate_custom_Max > datetime.strptime('2022-07-05' , '%Y-%m-%d'):
+#EXTRACT MONTH
+fields['Created Date'].month , .year 
